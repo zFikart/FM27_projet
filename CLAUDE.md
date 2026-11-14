@@ -11,11 +11,12 @@
 - Source de données retenue : **mon propre exportateur par OCR** (captures d'écran de la vue
   d'effectif FM27, lues avec Tesseract). Aucune modification du jeu.
   Les exports HTML/CSV (natif ou plugin) restent possibles plus tard comme importeurs supplémentaires.
-- Stack : Java 21, Maven, Tess4J (Tesseract), java.awt / BufferedImage (prétraitement),
-  Jackson (JSON), JUnit 5. Plus tard : JPA/Hibernate (H2 puis PostgreSQL), Spring Boot.
+- Stack : Java 21, Maven, **Spring Boot 4 dès le départ** (CLI via `CommandLineRunner`), Tess4J (Tesseract),
+  java.awt / BufferedImage (prétraitement), Jackson 3 (JSON, package `tools.jackson`), JUnit 5 (spring-boot-starter-test),
+  Checkstyle (Google adapté à 4 espaces, `config/checkstyle/checkstyle.xml`) et sortpom. Plus tard : Spring Data JPA (H2 puis PostgreSQL), Spring Web.
 - Lecture mémoire externe (JNA + Cheat Engine/Il2CppDumper) : idée de second projet, pas maintenant.
 
-## Architecture (à respecter dès le début, pour migrer vers Spring sans réécriture)
+## Architecture (à respecter dès le début ; beans Spring injectés par constructeur)
 - `model` : Player, Role, Attribute, Slot (postes)
 - `io` : interface `PlayerImporter` avec une implémentation par source
   (`OcrImporter` d'abord ; `HtmlImporter`/`CsvImporter` possibles plus tard) + chargement des rôles (JSON).
@@ -53,14 +54,13 @@ O6. Capture automatique (`java.awt.Robot`) + défilement et fusion sans doublons
 9. Détecter les postes faibles du XI, proposer les recrues qui les comblent
 
 **Phase 2 — Suivi de progression**
-10. Persistance JPA/Hibernate (H2 puis PostgreSQL)
+10. Persistance Spring Data JPA / Hibernate (H2 puis PostgreSQL)
 11. Entités : Player, Snapshot (export daté), valeurs d'attributs
 12. Requêtes d'évolution (par joueur, par saison, plus fortes hausses)
 
 **Phase 4 — Dashboard web**
-13. Migration Spring Boot (services, repositories)
-14. API REST : effectif, rôles, XI, shortlist, progression
-15. Front Angular (consomme l'API REST ; CORS ou proxy en dev, DTO côté Spring)
+13. API REST (spring-boot-starter-web) : effectif, rôles, XI, shortlist, progression
+14. Front Angular (consomme l'API REST ; CORS ou proxy en dev, DTO côté Spring)
 
 ## Avancement
 - Étape en cours : O1
