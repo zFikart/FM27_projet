@@ -1,51 +1,66 @@
-# FM22 Role Analyzer — projet d'apprentissage
+# FM27 Role Analyzer — projet d'apprentissage
 
 ## Mode de travail (important)
-- Objectif : **apprendre Java** et ses fonctionnalités en construisant un vrai projet.
-- Je construis pas à pas. Ne m'écris pas le code à ma place.
+- Je construis ce projet **pas à pas pour apprendre**. Ne m'écris pas le code à ma place.
 - Donne-moi l'objectif de l'étape, des indices (classes/méthodes à regarder), puis relis mon code.
 - Ne montre une solution complète que si je la demande explicitement.
 - Réponses concises et directes, en français.
 
-## Gestion de projet
-- Le projet est découpé en **versions** (une par phase), chaque version en **user stories** : voir `docs/BACKLOG.md`.
-- Une story = une branche `feature/US-xx-nom`, des commits courts (Conventional Commits : `feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:`), puis une revue avant le merge sur `main`.
-- On ne commence pas une story tant que la précédente n'est pas « Done ».
-- **Definition of Done** : les critères d'acceptation sont remplis, `mvn test` passe, le code est relu, la branche est mergée, le backlog et la section Avancement sont mis à jour.
-- Tests écrits **au fil de l'eau** (dès la première logique testable), pas à la fin.
-
 ## Contexte
-- Jeu : Football Manager 2022, **en français**. Données d'entrée : export HTML du jeu
-  (vue d'effectif ou de recherche → Ctrl+A → Ctrl+P → "page web").
-- Je contrôle les colonnes : la vue d'export est **imposée** (liste de colonnes figée et documentée),
-  et elle inclut **UID** dès le départ (identité stable du joueur pour les phases suivantes).
-- En-têtes en français abrégés (« Acc », « Vit »…) → table de correspondance abréviation → attribut.
-- Stack : Java 21, Maven, Jsoup (parsing HTML), Jackson (JSON), JUnit 5.
-  Plus tard : JPA/Hibernate (H2 puis PostgreSQL), Spring Boot.
+- Jeu : Football Manager 27 (sortie PC/Mac le 10/11/2026, moteur Unity comme FM26).
+- Source de données retenue : **mon propre exportateur par OCR** (captures d'écran de la vue
+  d'effectif FM27, lues avec Tesseract). Aucune modification du jeu.
+  Les exports HTML/CSV (natif ou plugin) restent possibles plus tard comme importeurs supplémentaires.
+- Stack : Java 21, Maven, Tess4J (Tesseract), java.awt / BufferedImage (prétraitement),
+  Jackson (JSON), JUnit 5. Plus tard : JPA/Hibernate (H2 puis PostgreSQL), Spring Boot.
+- Lecture mémoire externe (JNA + Cheat Engine/Il2CppDumper) : idée de second projet, pas maintenant.
 
 ## Architecture (à respecter dès le début, pour migrer vers Spring sans réécriture)
-- `model` : Player (distinction joueur de champ / gardien), Role, Duty (enum), Attribute, Slot (postes)
-- `io` : lecture de l'export HTML et du fichier des rôles (JSON)
-- `scoring` : calculs purs, aucune dépendance à Jsoup ni aux fichiers
+- `model` : Player, Role, Attribute, Slot (postes)
+- `io` : interface `PlayerImporter` avec une implémentation par source
+  (`OcrImporter` d'abord ; `HtmlImporter`/`CsvImporter` possibles plus tard) + chargement des rôles (JSON).
+  Le reste du code ne doit jamais savoir d'où viennent les données.
+- `ocr` : capture, prétraitement d'image, découpe en cellules, appel à Tesseract, validation.
+- `scoring` : calculs purs, aucune dépendance à Jsoup, au CSV ni aux fichiers
 - `App` : orchestration uniquement
 
 ## Modèle de score
-- Un rôle est défini par un couple **(rôle, devoir)**, ex. « Milieu relayeur / Soutien ».
-- Chaque couple a des attributs clés et préférables (écran tactique du jeu).
-- Score = moyenne pondérée (clés ×3, préférables ×2) + **poids « méta » configurables**
-  (ex. Vitesse, Accélération), ramenée sur 100.
-- La familiarité au poste n'entre pas dans le score : elle sert de contrainte ou de pénalité au moment de l'affectation du XI.
-- v1 : joueurs **parfaitement connus** uniquement (son propre effectif), sans indice de confiance.
-  Les plages « 12-15 » (milieu de la plage) et « - » (absent) arrivent avec le recrutement (v2).
-- Le fichier des rôles démarre avec environ 5 couples, puis on l'élargit.
+- Chaque rôle a des attributs clés et préférables (écran tactique du jeu).
+  Les rôles FM26/FM27 diffèrent des anciennes versions : relever la liste dans le jeu.
+- Score = moyenne pondérée (clés ×3, préférables ×2), ramenée sur 100.
+- Attribut en plage "12-15" (brouillard du scouting) → milieu de la plage ; "-" → absent.
 
-## Feuille de route (ordre : v1 → v2 → v3 → v4)
-- **v1 — Analyseur de rôles (CLI)** : en cours, détail dans le backlog.
-- **v2 — Recrutement Moneyball** : valeur, salaire, âge, plages de scouting, indice qualité/prix,
-  postes faibles du XI → recrues. Question ouverte : comment évaluer un jeune sans son potentiel ?
-- **v3 — Suivi de progression** : JPA/Hibernate, Snapshot (export + date en jeu saisie), requêtes d'évolution.
-- **v4 — Dashboard web** : Spring Boot, API REST, front simple.
+## Feuille de route (ordre : phase 1 → 3 → 2 → 4)
+**Phase 0 — Exportateur OCR**
+O1. Tess4J installé ; OCR brut d'une cellule d'attribut découpée à la main
+O2. Prétraitement (agrandir, gris, inversion, binarisation) + whitelist `0123456789-` + PSM ligne unique ; comparer avec O1
+O3. Calibration de la grille (X des colonnes, hauteur de ligne) → découpe automatique d'une ligne
+O4. Lecture d'un écran complet → `List<Player>` via `OcrImporter`
+O5. Validation (1-20 ou plage "12-15") + rapport des cellules douteuses
+O6. Capture automatique (`java.awt.Robot`) + défilement et fusion sans doublons
+
+**Phase 1 — Analyseur de rôles (CLI)**
+1. Définir `PlayerImporter` et brancher `OcrImporter`
+2. Charger les rôles depuis un JSON (Jackson), relevés dans FM27
+3. Calculer le score joueur × rôle
+4. Interpréter la colonne Position
+5. Tests JUnit (OCR sur images de référence, scoring)
+6. Meilleur XI pour une tactique (algorithme hongrois)
+
+**Phase 3 — Recrutement Moneyball**
+7. Ajouter valeur et salaire au modèle (colonnes OCR supplémentaires)
+8. Indice qualité/prix, shortlist filtrée
+9. Détecter les postes faibles du XI, proposer les recrues qui les comblent
+
+**Phase 2 — Suivi de progression**
+10. Persistance JPA/Hibernate (H2 puis PostgreSQL)
+11. Entités : Player, Snapshot (export daté), valeurs d'attributs
+12. Requêtes d'évolution (par joueur, par saison, plus fortes hausses)
+
+**Phase 4 — Dashboard web**
+13. Migration Spring Boot (services, repositories)
+14. API REST : effectif, rôles, XI, shortlist, progression
+15. Front Angular (consomme l'API REST ; CORS ou proxy en dev, DTO côté Spring)
 
 ## Avancement
-- Version : v1
-- Story en cours : US-00
+- Étape en cours : O1
