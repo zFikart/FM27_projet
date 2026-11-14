@@ -2,66 +2,106 @@
 
 Statuts : `TODO` · `EN COURS` · `DONE`
 
-## v1 — Analyseur de rôles (CLI)
+## v1 — Extraction des attributs de mon effectif
 
-**Objectif de la version :** à partir de l'export de mon effectif, l'outil me donne le classement des joueurs pour un rôle, puis le meilleur XI pour ma tactique.
+**Objectif de la version :** à partir d'un dossier de captures des fiches joueurs de mon effectif,
+l'outil enregistre un relevé daté (snapshot) de chaque joueur et de ses attributs dans PostgreSQL.
 
-### US-00 — Mise en place du projet · `TODO`
-En tant que développeur, je veux un projet Maven versionné, pour travailler proprement dès le départ.
-- [ ] Dépôt Git initialisé, `.gitignore` Java/Maven/IDE
-- [ ] `pom.xml` Java 21 avec Jsoup, Jackson et JUnit 5
-- [ ] Packages `model`, `io`, `scoring`, plus une classe `App`
-- [ ] `mvn test` passe (même sans aucun test)
-- [ ] `README.md` minimal : ce que fait l'outil, comment le lancer
-- [ ] Vue d'export FM documentée dans `docs/EXPORT.md` (liste des colonnes, dont UID)
+**Critère de fin :** ≥ 99 % de cellules correctes sur ~5 fiches de référence, cellules douteuses corrigées avant enregistrement.
 
-### US-01 — Lire l'export HTML · `TODO`
-En tant qu'utilisateur, je veux donner le chemin d'un export à l'outil, pour qu'il le lise.
-- [ ] Le fichier HTML est lu avec Jsoup, et les en-têtes du tableau sont affichés
-- [ ] Un message clair s'affiche si le fichier est absent ou ne contient pas de tableau
+### US-00 — Mise en place du projet · `EN COURS`
+En tant que développeur, je veux un projet Spring Boot outillé et versionné, pour travailler proprement dès le départ.
+- [x] Dépôt Git, `.gitignore` Java/Maven/IDE
+- [x] `pom.xml` : Spring Boot 4, Java 21, Tess4J, Jackson 3, Checkstyle (4 espaces), sortpom
+- [ ] `App` (`@SpringBootApplication`) et packages `model`, `io`, `ocr`, `scoring` (avec `package-info.java`)
+- [ ] `application.properties` : chemin `tessdata`, surchargeable par variable d'environnement
+- [ ] Test `contextLoads` ; `mvn verify` passe
+- [ ] Maven Wrapper (`mvnw`) et `.gitattributes` (fins de ligne LF)
+- [ ] `README.md` : but de l'outil, prérequis (Java 21, Tesseract, Docker), commandes
+- [ ] GitHub Actions : `mvn verify` sur chaque PR ; PR bloquée si échec
+- [ ] Tesseract installé et fonctionnel sur Ubuntu et Windows
 
-### US-02 — Transformer les lignes en joueurs · `TODO`
-En tant qu'utilisateur, je veux que chaque ligne devienne un joueur, pour pouvoir l'analyser.
-- [ ] Table de correspondance entre abréviations FR et attributs
-- [ ] `Player` contient l'UID, le nom, la position brute et les attributs ; les gardiens sont distingués des joueurs de champ
-- [ ] Une ligne invalide est signalée sans faire planter l'outil
-- [ ] Tests : parsing d'une ligne de champ, d'une ligne de gardien, d'une ligne invalide
+### US-01 — OCR brut (O1) · `TODO`
+En tant que développeur, je veux lire une cellule d'attribut avec Tess4J, pour valider la chaîne technique.
+- [ ] Une cellule découpée à la main est lue par Tess4J depuis Java
+- [ ] Résultat brut noté (base de comparaison pour US-02)
 
-### US-03 — Charger les rôles · `TODO`
-En tant qu'utilisateur, je veux définir les rôles dans un JSON, pour les modifier sans recompiler.
-- [ ] `roles.json` : environ 5 couples (rôle, devoir) avec leurs attributs clés et préférables
-- [ ] Poids méta configurables dans le JSON
-- [ ] Erreur explicite si un attribut inconnu est cité
-- [ ] Tests : chargement valide, attribut inconnu
+### US-02 — Prétraitement (O2) · `TODO`
+En tant que développeur, je veux améliorer la lecture d'une cellule, pour fiabiliser l'OCR.
+- [ ] Agrandissement, niveaux de gris, inversion, binarisation (`BufferedImage`)
+- [ ] Whitelist `0123456789-` et PSM ligne unique pour les attributs ; `fra` sans whitelist pour le texte
+- [ ] Comparatif avant / après sur plusieurs cellules
+- [ ] Tests unitaires du prétraitement
 
-### US-04 — Calculer le score · `TODO`
-En tant qu'utilisateur, je veux le score /100 d'un joueur pour un rôle.
-- [ ] Calcul de la moyenne pondérée (×3, ×2, plus les poids méta), ramenée sur 100
-- [ ] Le package `scoring` ne dépend ni de Jsoup ni des fichiers
-- [ ] Tests : cas calculés à la main (joueur à 20 partout = 100, etc.)
+### US-03 — Conditions de capture et fiches de référence · `TODO`
+En tant qu'utilisateur, je veux des conditions de capture figées et des données de référence, pour mesurer la qualité de l'OCR.
+- [ ] `docs/FICHE_OCR.md` rempli : résolution, zoom, skin, langue, mises en page champ et gardien
+- [ ] Liste exacte des attributs FM27 relevée → `enum Attribute` (libellé FR, catégorie)
+- [ ] ~5 fiches PNG dans `src/test/resources/fiches/` (dont un gardien, un nom accentué, des attributs à 1 chiffre)
+- [ ] Un `xxx.expected.json` écrit à la main par fiche
 
-### US-05 — Classement en ligne de commande · `TODO`
-En tant qu'utilisateur, je veux le top N de mon effectif pour un rôle donné.
-- [ ] Commande du type `--export fichier.html --role "Milieu relayeur" --duty SOUTIEN --top 5`
-- [ ] Affichage sous forme de tableau lisible (rang, nom, score)
-- [ ] Message clair si le rôle ou le devoir est inconnu
+### US-04 — Gabarits de la fiche (O3) · `TODO`
+En tant que développeur, je veux décrire les zones de la fiche, pour découper automatiquement chaque valeur.
+- [ ] `gabarit-champ.json` et `gabarit-gardien.json` (coordonnées en pixels) dans `src/main/resources`
+- [ ] Chargement des gabarits avec Jackson
+- [ ] Mode `calibrate` : dessine les zones sur une capture pour vérification visuelle
 
-### US-06 — Interpréter les positions · `TODO`
-En tant qu'utilisateur, je veux que l'outil comprenne « D (DGC), MD, M/MO (G) ».
-- [ ] La chaîne de position est transformée en un ensemble de `Slot`
-- [ ] Tests sur au moins 6 formats réels tirés de mes exports
+### US-05 — Une fiche → un joueur (O4) · `TODO`
+En tant qu'utilisateur, je veux qu'une capture devienne un `Player`, pour obtenir ses données.
+- [ ] Détection automatique du gabarit (champ / gardien)
+- [ ] Lecture : nom, date de naissance, postes (brut), pied préféré, attributs
+- [ ] Test : taux de cellules correctes calculé sur les fiches de référence (objectif ≥ 99 %)
 
-### US-07 — Meilleur XI · `TODO`
-En tant qu'utilisateur, je veux le meilleur XI pour une tactique, avec un joueur par poste.
-- [ ] Tactique décrite en JSON : 11 slots, chacun avec un (rôle, devoir)
-- [ ] Affectation optimale par l'algorithme hongrois, avec contrainte ou pénalité si le poste n'est pas familier
-- [ ] Tests : petit cas (3×3) vérifiable à la main
+### US-06 — Docker et PostgreSQL (D1) · `TODO`
+En tant que développeur, je veux une base PostgreSQL locale, pour stocker les relevés.
+- [ ] Cours `/teach` : Docker, Docker Compose, PostgreSQL vs MySQL
+- [ ] `compose.yaml` avec PostgreSQL ; démarrage par Spring Boot (`spring-boot-docker-compose`)
+- [ ] Connexion vérifiée avec `psql`
 
-## v2 — Recrutement Moneyball
-*(stories à écrire au lancement de la version)*
+### US-07 — Schéma Flyway (D2) · `TODO`
+En tant que développeur, je veux un schéma versionné, pour faire évoluer la base proprement.
+- [ ] Cours `/teach` : Flyway
+- [ ] `V1__init.sql` : `save`, `player`, `snapshot`, valeurs d'attributs
+- [ ] Contrainte d'unicité (sauvegarde, nom, date de naissance) et (sauvegarde, date de jeu) pour le snapshot
 
-## v3 — Suivi de progression
-*(stories à écrire au lancement de la version)*
+### US-08 — Persistance JPA (D3) · `TODO`
+En tant que développeur, je veux enregistrer un snapshot, pour garder l'historique.
+- [ ] Cours `/teach` : Spring Data JPA, entités, repositories, transactions
+- [ ] Entités et repositories ; enregistrement d'un snapshot en une transaction
+- [ ] Joueur existant (clé naturelle) réutilisé, sinon créé
 
-## v4 — Dashboard web
-*(stories à écrire au lancement de la version)*
+### US-09 — Tests d'intégration (D4) · `TODO`
+En tant que développeur, je veux tester la persistance sur un vrai PostgreSQL, pour éviter les surprises.
+- [ ] Cours `/teach` : Testcontainers
+- [ ] Tests repository / service avec Testcontainers ; passent aussi en CI
+
+### US-10 — Validation et correction (O5) · `TODO`
+En tant qu'utilisateur, je veux corriger les valeurs douteuses, pour ne rien enregistrer de faux.
+- [ ] Règles : attribut entier 1-20, nom non vide, date de naissance valide
+- [ ] Pour chaque doute : affichage joueur, attribut, valeur lue, chemin de l'image découpée ; saisie de la correction
+- [ ] Rien n'est enregistré tant qu'il reste des doutes
+
+### US-11 — Commande d'import (O6) · `TODO`
+En tant qu'utilisateur, je veux importer un dossier de captures, pour créer un relevé de mon effectif.
+- [ ] `PlayerImporter` / `OcrImporter` ; le reste du code ignore la source
+- [ ] `import --save "Lens" --game-date 2027-08-01 --dir captures/ [--replace]`
+- [ ] Snapshot en double refusé sans `--replace`
+- [ ] Export JSON du snapshot (debug)
+- [ ] Résumé en fin d'import (joueurs lus, corrections, durée)
+
+## Après la v1 (ordre ajustable selon le besoin)
+
+### Capture automatique · `TODO`
+*`java.awt.Robot` sur le PC de jeu, bouton « joueur suivant ». Stories à écrire.*
+
+### v2 — Score par rôle et meilleur XI
+*Relever les rôles FM27 dans le jeu (avec / sans ballon) → `roles.json`. Stories à écrire.*
+
+### v3 — Suivi de progression
+*Comparaison de snapshots. Stories à écrire.*
+
+### v4 — API REST et front Angular
+*Spring Web + `frontend/` Angular. Stories à écrire.*
+
+### v5 — Recrutement Moneyball
+*Fiches hors effectif : plages "12-15", valeur, salaire. Stories à écrire.*
